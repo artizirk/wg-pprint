@@ -1,7 +1,7 @@
-#!/bin/sh
-# generate a nice html page from your wireguard info
-# copied from https://activezone.de/wireguard/
-
+#!/bin/bash
+### This script was placed on your WireGuard server and will be executed over SSH (as example)
+### I'm not a very good script programmer but it works ;-)
+###
 a=" style=\"background-color:#0000bf;color:#ffffff;font-size:10pt;font-weight:bold;\""
 b=" style=\"color:#000000;font-size:10pt;\""
 c=" style=\"background-color:#ffffff;color:#000000;font-size:10pt;\""
@@ -15,7 +15,11 @@ f=" style=\"background-color:#efefef;color:#0000af;font-weight:bold;font-size:8p
 g=" style=\"background-color:#efefef;color:#af00af;font-weight:bold;font-size:8pt;border:1px solid #afafaf;\" align=\"right\""
 count=0
 endp=0
+echo "<!DOCTYPE html>"
+echo '<meta charset="UTF-8">'
 echo "<b style=\"font-family:verdana,arial;font-size:8pt;\">$(date)</b>"
+echo "<table cellspacing=\"3\" cellpadding=\"3\" border=\"0\" "\
+			     "style=\"font-family:verdana,arial;font-size:9pt;\">"
 /usr/bin/wg show | while read line
 do
 	firstword=$(echo $line|cut -d ' ' -f1|tr -d ':')
@@ -26,13 +30,13 @@ do
 			count=$(expr $count + 1)
 			value=$(echo $line|awk '{ print $2 }')
 			ifname=$value
-			localip=$(/sbin/ifconfig $value|grep netmask|awk '{ print $2 }')
-			mask=$(/sbin/ifconfig $value|grep netmask|awk '{ print $4 }')
+			localip=$(ip --oneline -f inet addr show $value | awk '{split($4,a,"/"); print a[1]}')
+			mask=$(ip --oneline -f inet addr show $value | awk '{split($4,a,"/"); print a[2]}')
 			tmpremoteip=$(echo $localip|cut -d '.' -f1,2,3)
 			lastoctet=$(echo $localip|cut -d '.' -f4)
 			lastoctet=$(expr $lastoctet + 1)
 			remoteip="$tmpremoteip.$lastoctet"
-			pingresult="$(/bin/ping -W1 -c1 $remoteip|grep -i avg)"
+			pingresult="$(ping -W1 -c1 $remoteip|grep -i avg)"
 			echo $pingresult | grep "avg" > /dev/null
 			if [ $? -ne 0 ]; then
 			   pingresult="UNREACHABLE"
@@ -208,6 +212,3 @@ do
 			;;
 	esac
 done
-
-
-
