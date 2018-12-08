@@ -1,0 +1,213 @@
+#!/bin/sh
+# generate a nice html page from your wireguard info
+# copied from https://activezone.de/wireguard/
+
+a=" style=\"background-color:#0000bf;color:#ffffff;font-size:10pt;font-weight:bold;\""
+b=" style=\"color:#000000;font-size:10pt;\""
+c=" style=\"background-color:#ffffff;color:#000000;font-size:10pt;\""
+cc=" style=\"background-color:#ffffff;color:#000000;font-size:10pt;display:none;\""
+d=" style=\"background-color:#ffffff;color:#808080;font-size:10pt;\""
+e1=" style=\"color:#9f9f9f;font-size:9pt;border:1px solid #0000af;\" align=\"left\""
+e3=" style=\"background-color:#0000af;color:white;font-size:9pt;border:1px solid #0000af;\" align=\"left\""
+e2=" style=\"color:#9f9f9f;font-size:9pt;border:1px solid #af00af;\" align=\"left\""
+e4=" style=\"background-color:#af00af;color:white;font-size:9pt;border:1px solid #af0000;\" align=\"left\""
+f=" style=\"background-color:#efefef;color:#0000af;font-weight:bold;font-size:8pt;border:1px solid #afafaf;\" align=\"right\""
+g=" style=\"background-color:#efefef;color:#af00af;font-weight:bold;font-size:8pt;border:1px solid #afafaf;\" align=\"right\""
+count=0
+endp=0
+echo "<b style=\"font-family:verdana,arial;font-size:8pt;\">$(date)</b>"
+/usr/bin/wg show | while read line
+do
+	firstword=$(echo $line|cut -d ' ' -f1|tr -d ':')
+	case $firstword in
+		interface)
+			endp=0
+			div=0
+			count=$(expr $count + 1)
+			value=$(echo $line|awk '{ print $2 }')
+			ifname=$value
+			localip=$(/sbin/ifconfig $value|grep netmask|awk '{ print $2 }')
+			mask=$(/sbin/ifconfig $value|grep netmask|awk '{ print $4 }')
+			tmpremoteip=$(echo $localip|cut -d '.' -f1,2,3)
+			lastoctet=$(echo $localip|cut -d '.' -f4)
+			lastoctet=$(expr $lastoctet + 1)
+			remoteip="$tmpremoteip.$lastoctet"
+			pingresult="$(/bin/ping -W1 -c1 $remoteip|grep -i avg)"
+			echo $pingresult | grep "avg" > /dev/null
+			if [ $? -ne 0 ]; then
+			   pingresult="UNREACHABLE"
+			fi
+			echo "<tr>"
+			if [ $count -eq 1 ]; then
+			   echo "<td$a nowrap>&nbsp;Interface</td><td$a nowrap>&nbsp;Public Key</td><td$a nowrap>&nbsp;Listener Port</td><td$a>&nbsp;Peer Public Key</td>"
+			   echo "<td$a nowrap>&nbsp;Protocol</td>"
+			   echo "<td$a nowrap>&nbsp;Endpoint IP</td></tr>"
+			   echo "<tr align=\"center\"><td$b><b><input type=button name=type value='${value}' onclick=\"javascript:setVisibility${value}();\";><br></td>"
+			else
+			   echo "<tr align=\"center\"><td$b><b><input type=button name=type value='${value}' onclick=\"javascript:setVisibility${value}();\";><br></td>"
+			fi
+			;;
+
+		public)	
+			value=$(echo $line|awk '{ print $3 }')
+			lvalue=$(echo $value|cut -c1-4)
+			rvalue=$(echo $value|cut -c28-32)
+			echo "<td$b align=\"left\">&nbsp;${lvalue}<b style=\"font-weight:normal;color:#afafaf;\">---</b>${rvalue} <b style=\"font-weight:normal;color:#afafaf;\">(truncated)</b><br></td>"
+			;;
+
+		listening)
+			value=$(echo $line|awk '{ print $3 }')
+			echo "<td$b align=\"left\">&nbsp;<b style=\"color:#5f5f5f;font-weight:normal;\">${value}/udp</b><br></td>"
+			;;
+
+		peer)
+			value=$(echo $line|awk '{ print $2 }')
+			lvalue=$(echo $value|cut -c1-4)
+			rvalue=$(echo $value|cut -c28-32)
+			echo "<td$b align=\"left\">&nbsp;${lvalue}<b style=\"font-weight:normal;color:#afafaf;\">---</b>${rvalue} <b style=\"font-weight:normal;color:#afafaf;\">(truncated)</b><br></td>"
+			;;
+		
+		endpoint)
+			value=$(echo $line|awk '{ print $2 }')
+			echo $value|grep "\[" > /dev/null
+			if [ $? -eq 0 ]; then
+			   prot="IPv6"
+			   ip="$(echo $value|cut -d ']' -f1|tr '[' ' ')"
+			   port=$(echo $value|cut -d ']' -f2|cut -d ':' -f2)
+			else
+			   prot="IPv4"
+			   ip="$(echo $value|cut -d ':' -f1)"
+			   port=$(echo $value|cut -d ':' -f2)
+			fi
+			echo "<td$b align=\"left\">&nbsp;${prot}&nbsp;<br></td>"
+			echo "<td$b align=\"right\">&nbsp;${prot}&nbsp;<b style=\"font-size:10pt;color:#bf0000;\" nowrap>${ip}</b><b style=\"font-weight:normal;color:#afafaf;\">:${port}</b><br></td>"
+			echo "</tr>"
+			echo "<tr$c><td$d align=\"right\">&nbsp;Network<br></td><td$d colspan=\"5\">&nbsp;<b>${localip}/${mask}</b>&nbsp;<br></td></tr>"
+			echo "<tr$c><td$d align=\"right\" valign=\"middle\">&nbsp;Stats<br></td><td$d colspan=\"5\">"
+			echo "<table cellspacing=\"3\" cellpadding=\"3\" border=\"0\" "\
+			     "style=\"font-family:verdana,arial;font-size:9pt;\"><tr>"
+
+			printf "<td$e3>RCV</td>"
+			printf "<td$e1>Bytes</td>"
+			printf "<td$e1>Packets</td>"
+			printf "<td$e1>Errors</td>"
+			printf "<td$e1>Drops</td>"
+			printf "<td$e1>FiFo</td>"
+			printf "<td$e1>Frames</td>"
+			printf "<td$e1>Comp</td>"
+			printf "<td$e1>Multicast</td>"
+			printf "<td$e4>SND</td>"
+			printf "<td$e2>Bytes</td>"
+			printf "<td$e2>Packets</td>"
+			printf "<td$e2>Errors</td>"
+			printf "<td$e2>Drops</td>"
+			printf "<td$e2>FiFo</td>"
+			printf "<td$e2>Colls</td>"
+			printf "<td$e2>Carrier</td>"
+			printf "<td$e2>Comp</td></tr><tr>"
+			
+			numcount=0
+			report=0
+			cat /proc/net/dev | tr '|' ' ' | while IFS=' ' read c_if c_rcvbytes c_rcvpackets \
+                                                                            c_rcverrs c_rcvdrop c_rcvfifo \
+                                                                            c_rcvframe c_rcvcomp c_rcvmulti \
+                                                                            c_trbytes c_trpackets c_trerr \
+                                                                            c_trdrop c_trfifo c_trcolls \
+									    c_trcarrier c_trcomp
+			do
+				numcount=$(expr $numcount + 1)
+				if [ $numcount -le 3 ]; then
+				   continue
+				fi
+
+				echo $c_if | grep $ifname > /dev/null
+				if [ $? -eq 0 ]; then
+				   report=1
+				fi
+
+				if [ $report -eq 0 ]; then
+				   continue
+				fi
+
+				printf "<td$f>&nbsp;</td>" 
+				printf "<td$f>%s</td>" $c_rcvbytes
+				printf "<td$f>%s</td>" $c_rcvpackets
+				printf "<td$f>%s</td>" $c_rcverrs
+				printf "<td$f>%s</td>" $c_rcvdrop
+				printf "<td$f>%s</td>" $c_rcvfifo
+				printf "<td$f>%s</td>" $c_rcvframe
+				printf "<td$f>%s</td>" $c_rcvcomp
+				printf "<td$f>%s</td>" $c_rcvmulti
+				printf "<td$g>&nbsp;</td>" 
+				printf "<td$g>%s</td>" $c_trbytes
+				printf "<td$g>%s</td>" $c_trpackets
+				printf "<td$g>%s</td>" $c_trerr
+				printf "<td$g>%s</td>" $c_trdrop
+				printf "<td$g>%s</td>" $c_trfifo
+				printf "<td$g>%s</td>" $c_trcolls
+				printf "<td$g>%s</td>" $c_trcarrier
+				printf "<td$g>%s</td></tr>" $c_trcomp
+				report=0
+			done
+
+			echo "</table></td></tr>"
+			echo "<tr$c><td$d align=\"right\">&nbsp;Latency<br></td><td$d colspan=\"5\">&nbsp;<b>${pingresult}</b> - ${remoteip}&nbsp;<br></td></tr><!-- <div style=\"display:none;\" id=\"${ifname}\"> -->"
+			endp=1
+			;;
+
+		allowed)
+			if [ $endp -eq 0 ]; then
+			   echo "<td$b align=\"center\" colspan=\"2\">&nbsp;<b style=\"color:red;\">DOWN</b><br></td>"
+			   echo "</tr>"
+			   echo "<tr$c><td$d align=\"right\">&nbsp;Latency<br></td><td$d colspan=\"5\"><b>${pingresult}</b> - ${remoteip}&nbsp;<br></td></tr><!-- <div style=\"display:none;\" id=\"${ifname}\"> -->"
+			fi
+			value="$(echo $line|cut -d ':' -f2-|tr "," " ")"
+			i=0
+			for network in $value
+			do
+			     i=$(expr $i + 1)
+			     echo "<tr$cc id="${ifname}${i}"><td$d align=\"right\">&nbsp;Peer Routing<br></td><td$d colspan=\"5\"><b>&nbsp;${network}<br></td></tr>"
+			echo "<script language=\"javascript\" type=\"text/javascript\">"
+			echo "var idname='${ifname}';"
+			echo "function setVisibility${ifname}()"
+			echo "{"
+			echo "   if (document.getElementById('${ifname}1').style.display == 'none') {"
+			echo "       for (i = 1; i <= $i; i++) {"
+			echo "           idname='${ifname}'+i;"
+			echo "           document.getElementById(idname).style.display = 'table-row';"
+			echo "       }"
+			echo "   } else {"
+			echo "       for (i = 1; i <= $i; i++) {"
+			echo "           idname='${ifname}'+i;"
+			echo "           document.getElementById(idname).style.display = 'none';"
+			echo "       }"
+			echo "   }"
+			echo "}"
+			echo "</script>"
+			done
+			;;
+
+		latest)
+			handshake=$(echo $line|cut -d ':' -f2-)
+			echo "<tr$c><td$d align=\"right\">&nbsp;Last Handshake<br></td><td$d colspan=\"5\"><b>${handshake}</b><br></td></tr>"
+			;;
+
+		transfer)
+			transfer=$(echo $line|cut -d ':' -f2-)
+			echo "<!-- </div> --><tr$c><td$d align=\"right\">&nbsp;Statistics<br></td><td$d colspan=\"5\"><b>${transfer}</b><br></td></tr>"
+			div=1
+			;;
+
+		persistent)
+			if [ $div -eq 0 ]; then
+			   echo "<!-- </div> -->"
+			   div=0
+			fi
+			keepalive=$(echo $line|cut -d ':' -f2-)
+			echo "<tr$c><td$d align=\"right\">&nbsp;Keepalive<br></td><td$d colspan=\"5\"><b>${keepalive}</b><br></td></tr>"
+			;;
+	esac
+done
+
+
+
